@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["telegram-mcp-kit/**"]
+  pull_request:
+    branches: [main]
+    paths: ["telegram-mcp-kit/**"]
+
+defaults:
+  run:
+    working-directory: telegram-mcp-kit
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - run: uv sync
+
+      - name: Lint
+        run: uv run ruff check src/ tests/
+
+      - name: Test
+        run: uv run pytest -v
