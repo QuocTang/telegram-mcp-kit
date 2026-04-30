@@ -3,14 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
-    paths: ["telegram-mcp-kit/**"]
   pull_request:
     branches: [main]
-    paths: ["telegram-mcp-kit/**"]
-
-defaults:
-  run:
-    working-directory: telegram-mcp-kit
 
 jobs:
   lint-and-test:
@@ -22,7 +16,7 @@ jobs:
         with:
           version: "latest"
 
-      - run: uv sync
+      - run: uv sync --dev
 
       - name: Lint
         run: uv run ruff check src/ tests/
