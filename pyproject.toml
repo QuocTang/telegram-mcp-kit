@@ -1,6 +1,6 @@
 [project]
 name = "telegram-mcp-kit"
-version = "0.2.1"
+version = "0.2.2"
 description = "Telegram Bot API integration via MCP"
 readme = "README.md"
 license = "MIT"
@@ -13,6 +13,10 @@ dependencies = [
     "mcp[cli]>=1.26.0",
     "pydantic-settings>=2.13.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/QuocTang/telegram-mcp-kit"
+Issues = "https://github.com/QuocTang/telegram-mcp-kit/issues"
 
 [dependency-groups]
 dev = [
