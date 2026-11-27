@@ -166,21 +166,34 @@ def resolve_chat_id(chat_id: str | None) -> str:
 
 
 async def send_long_text(
-    send: Callable[..., Any], cid: str, text: str, parse_mode: str | None, *args: Any
+    cid: str,
+    text: str,
+    parse_mode: str | None,
+    reply_to_message_id: int | None = None,
+    message_thread_id: int | None = None,
+    reply_markup: dict | None = None,
 ) -> SendResult:
-    """Send *text* through *send*, split into chunks of at most 4096 characters.
+    """Send *text* split into chunks of at most 4096 characters.
 
-    Args:
-        send: Client method called as ``send(cid, chunk, parse_mode, *args)``; extra
-            positional *args* are passed with the first chunk only.
+    The reply target applies to the first chunk and the reply markup to the last.
 
     Returns:
         The sent messages in order.
     """
+    client = get_client()
     chunks = split_text(text, MESSAGE_LIMIT)
-    sent = [await send(cid, chunks[0], parse_mode, *args)]
-    for chunk in chunks[1:]:
-        sent.append(await send(cid, chunk, parse_mode, *[None] * len(args)))
+    sent = []
+    for i, chunk in enumerate(chunks):
+        sent.append(
+            await client.send_message(
+                cid,
+                chunk,
+                parse_mode,
+                reply_to_message_id if i == 0 else None,
+                message_thread_id=message_thread_id,
+                reply_markup=reply_markup if i == len(chunks) - 1 else None,
+            )
+        )
     return SendResult(messages=sent)
 
 
@@ -200,7 +213,11 @@ def split_caption(caption: str | None) -> tuple[str | None, list[str]]:
 
 
 async def send_caption_overflow(
-    cid: str, media_result: dict, overflow: list[str], parse_mode: str | None
+    cid: str,
+    media_result: dict,
+    overflow: list[str],
+    parse_mode: str | None,
+    message_thread_id: int | None = None,
 ) -> SendResult:
     """Send caption overflow as replies to the media message.
 
@@ -209,5 +226,10 @@ async def send_caption_overflow(
     """
     client = get_client()
     reply_to = media_result.get("message_id") if isinstance(media_result, dict) else None
-    extra = [await client.send_message(cid, chunk, parse_mode, reply_to) for chunk in overflow]
+    extra = [
+        await client.send_message(
+            cid, chunk, parse_mode, reply_to, message_thread_id=message_thread_id
+        )
+        for chunk in overflow
+    ]
     return SendResult(messages=[media_result, *extra])

@@ -83,9 +83,9 @@ async def test_upload_dir_blocks_outside_path(mock_client, monkeypatch, tmp_path
     monkeypatch.setattr(f"{SETTINGS}.telegram_upload_dirs", str(inside))
     with pytest.raises(TelegramGuardError):
         await send_document_file(str(inside / ".." / "secret.txt"), chat_id="1")
-    mock_client.send_document_file.return_value = {"message_id": 1}
+    mock_client.send_media.return_value = {"message_id": 1}
     await send_document_file(str(inside / "a.txt"), chat_id="1")
-    assert mock_client.send_document_file.await_args.args[1] == str((inside / "a.txt").resolve())
+    assert mock_client.send_media.await_args.args[4] == str((inside / "a.txt").resolve())
 
 
 def test_upload_dir_blocks_symlink_escape(monkeypatch, tmp_path):
@@ -99,12 +99,14 @@ def test_upload_dir_blocks_symlink_escape(monkeypatch, tmp_path):
 
 
 async def test_caption_overflow_sent_as_reply(mock_client):
-    mock_client.send_photo.return_value = {"message_id": 10}
+    mock_client.send_media.return_value = {"message_id": 10}
     mock_client.send_message.return_value = {"message_id": 11}
     caption = "a" * 1000 + "\n" + "b" * 500
     out = await send_photo("u", chat_id="1", caption=caption)
-    assert mock_client.send_photo.await_args.args[2] == "a" * 1000
-    mock_client.send_message.assert_awaited_once_with("1", "b" * 500, None, 10)
+    assert mock_client.send_media.await_args.kwargs["caption"] == "a" * 1000
+    mock_client.send_message.assert_awaited_once_with(
+        "1", "b" * 500, None, 10, message_thread_id=None
+    )
     assert [m["message_id"] for m in out.messages] == [10, 11]
 
 
