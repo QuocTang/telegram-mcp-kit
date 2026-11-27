@@ -304,13 +304,49 @@ class TelegramClient:
         offset: int | None = None,
         limit: int = 100,
         allowed_updates: list[str] | None = None,
+        timeout: int = 0,
     ) -> list[dict]:
+        """Call getUpdates; a positive *timeout* long-polls for that many seconds."""
         params: dict = {"limit": limit}
         if offset is not None:
             params["offset"] = offset
         if allowed_updates:
             params["allowed_updates"] = allowed_updates
+        if timeout > 0:
+            params["timeout"] = timeout
+            return await self._request(
+                "getUpdates", json=params, timeout=self._client.timeout.read + timeout
+            )
         return await self._request("getUpdates", json=params)
+
+    async def answer_callback_query(
+        self, callback_query_id: str, text: str | None = None, show_alert: bool = False
+    ) -> bool:
+        params = self._compact(
+            {"callback_query_id": callback_query_id, "text": text, "show_alert": show_alert or None}
+        )
+        return await self._request("answerCallbackQuery", json=params)
+
+    async def send_message_draft(
+        self,
+        chat_id: int,
+        draft_id: int,
+        text: str,
+        parse_mode: str | None = None,
+        message_thread_id: int | None = None,
+        can_stop: bool = False,
+    ) -> bool:
+        params = self._compact(
+            {
+                "chat_id": chat_id,
+                "draft_id": draft_id,
+                "text": text,
+                "parse_mode": parse_mode or None,
+                "message_thread_id": message_thread_id,
+                "can_stop": can_stop or None,
+            }
+        )
+        return await self._request("sendMessageDraft", json=params)
 
     # ── Chat / Channel / Group Management ──
 

@@ -39,6 +39,8 @@ async def test_discover_tools_registers_all():
         "send_video",
         "send_audio",
         "send_media_group",
+        "send_progress",
+        "ask_approval",
     ]
     for name in expected:
         assert name in tools, f"Tool {name!r} not found after discover_tools()"

@@ -1,6 +1,6 @@
 """Structured output models shared by the tools (published as outputSchema)."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -46,3 +46,17 @@ class Confirmation(BaseModel):
     """Form shown to the user before a destructive action."""
 
     confirmed: bool = Field(description="Check to allow the action")
+
+
+class ApprovalResult(BaseModel):
+    """Outcome of ask_approval."""
+
+    status: Literal["approved", "rejected", "timeout", "dry_run"]
+    message_id: int | None = Field(default=None, description="The approval request message")
+    decided_by: dict[str, Any] | None = Field(
+        default=None, description="Telegram User who pressed the button"
+    )
+    waited_seconds: float = 0.0
+    ignored_presses: int = Field(
+        default=0, description="Presses rejected because the user is not an approver"
+    )

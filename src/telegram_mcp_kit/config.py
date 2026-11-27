@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     telegram_upload_dirs: str = ""
     telegram_wrap_updates: bool = False
     telegram_confirm_destructive: Literal["auto", "require", "off"] = "auto"
+    telegram_approver_ids: str = ""
 
     # Rate limiting and retries
     telegram_max_retries: int = 3
@@ -45,6 +46,11 @@ class Settings(BaseSettings):
     def allowed_chats(self) -> list[str]:
         """Chat ids and @usernames from TELEGRAM_ALLOWED_CHATS; empty means no restriction."""
         return _split_csv(self.telegram_allowed_chats)
+
+    @property
+    def approver_ids(self) -> set[int]:
+        """User ids from TELEGRAM_APPROVER_IDS allowed to answer ask_approval."""
+        return {int(item) for item in _split_csv(self.telegram_approver_ids)}
 
     @property
     def upload_dirs(self) -> list[str]:

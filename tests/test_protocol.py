@@ -118,3 +118,17 @@ def test_sse_warns_deprecated():
         warnings.simplefilter("always")
         assert resolve_transport("sse") == "sse"
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+
+
+async def test_ask_approval_over_mcp(mock_client, monkeypatch):
+    monkeypatch.setattr("telegram_mcp_kit.tools.approval.POLL_SECONDS", 1)
+    mock_client.send_message.return_value = {"message_id": 1}
+    mock_client.get_updates.return_value = []
+    async with Client(mcp) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        assert "ctx" not in tools["ask_approval"].input_schema["properties"]
+        result = await client.call_tool(
+            "ask_approval", {"question": "Q", "chat_id": "42", "timeout_seconds": 1}
+        )
+    assert not result.is_error, result.content
+    assert result.structured_content["status"] == "timeout"
