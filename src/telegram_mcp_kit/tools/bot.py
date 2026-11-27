@@ -2,10 +2,10 @@
 
 import json
 
-from telegram_mcp_kit.tools._base import get_client, mcp
+from telegram_mcp_kit.tools._base import get_client, tool
 
 
-@mcp.tool()
+@tool("read")
 async def get_bot_info() -> str:
     """Get information about the bot (name, username, etc.)."""
     result = await get_client().get_me()

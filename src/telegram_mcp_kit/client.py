@@ -1,6 +1,9 @@
 """Telegram Bot API client using httpx."""
 
+import asyncio
 import logging
+import time
+from collections.abc import Awaitable, Callable
 
 import httpx
 
@@ -12,27 +15,144 @@ for _name in ("httpx", "httpcore"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
 
-class TelegramClient:
-    """Lightweight Telegram Bot API client."""
+# Methods that only read state. They bypass pacing and dry-run.
+READ_METHODS = frozenset(
+    {
+        "getMe",
+        "getUpdates",
+        "getChat",
+        "getChatMemberCount",
+        "getChatMember",
+        "getChatAdministrators",
+        "getFile",
+    }
+)
 
-    def __init__(self, token: str, timeout: float = 30.0):
+
+class RateLimiter:
+    """Spaces out outgoing requests per chat and across all chats.
+
+    Args:
+        chat_interval: Minimum seconds between two requests to the same chat.
+        global_interval: Minimum seconds between any two requests.
+        clock: Monotonic clock, injectable for tests.
+        sleep: Async sleep, injectable for tests.
+    """
+
+    def __init__(
+        self,
+        chat_interval: float = 0.0,
+        global_interval: float = 0.0,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ):
+        self.chat_interval = chat_interval
+        self.global_interval = global_interval
+        self._clock = clock
+        self._sleep = sleep
+        self._lock = asyncio.Lock()
+        self._next_global = 0.0
+        self._next_chat: dict[str, float] = {}
+
+    async def acquire(self, chat_id: str | int | None) -> None:
+        """Wait until a request to *chat_id* is allowed, then reserve the slot."""
+        if self.chat_interval <= 0 and self.global_interval <= 0:
+            return
+        key = str(chat_id) if chat_id is not None else ""
+        async with self._lock:
+            now = self._clock()
+            wait = max(self._next_global - now, self._next_chat.get(key, 0.0) - now, 0.0)
+            if wait > 0:
+                await self._sleep(wait)
+                now = self._clock()
+            self._next_global = now + self.global_interval
+            if key:
+                self._next_chat[key] = now + self.chat_interval
+
+
+class TelegramClient:
+    """Lightweight Telegram Bot API client.
+
+    Args:
+        token: Bot token.
+        timeout: HTTP timeout in seconds.
+        max_retries: Times a request rejected with 429 is repeated after ``retry_after``.
+        max_retry_wait: A 429 asking to wait longer than this many seconds is not retried.
+        rate_limiter: Pacing applied to methods outside ``READ_METHODS``.
+        dry_run: When True, methods outside ``READ_METHODS`` are not sent; the request
+            that would have been sent is returned instead.
+    """
+
+    def __init__(
+        self,
+        token: str,
+        timeout: float = 30.0,
+        max_retries: int = 3,
+        max_retry_wait: float = 60.0,
+        rate_limiter: RateLimiter | None = None,
+        dry_run: bool = False,
+    ):
         self._token = token
         self.base_url = f"https://api.telegram.org/bot{token}"
         self._client = httpx.AsyncClient(timeout=timeout)
+        self.max_retries = max_retries
+        self.max_retry_wait = max_retry_wait
+        self.rate_limiter = rate_limiter or RateLimiter()
+        self.dry_run = dry_run
+        self._sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+
+    @staticmethod
+    def _params_of(kwargs: dict) -> dict:
+        return dict(kwargs.get("json") or kwargs.get("data") or {})
 
     async def _request(self, method: str, **kwargs) -> dict:
-        """Make a request to the Telegram Bot API."""
-        try:
-            resp = await self._client.post(f"{self.base_url}/{method}", **kwargs)
-        except httpx.HTTPError as exc:
-            raise TelegramNetworkError(exc, secret=self._token) from exc
-        data = resp.json()
-        if not data.get("ok"):
+        """Call *method* on the Bot API and return its ``result``.
+
+        A 429 response carrying ``parameters.retry_after`` is retried up to
+        ``max_retries`` times. Write methods are paced and honour ``dry_run``.
+
+        Raises:
+            TelegramAPIError: The API answered ``ok=false``.
+            TelegramNetworkError: The HTTP request failed.
+        """
+        params = self._params_of(kwargs)
+        is_write = method not in READ_METHODS
+        if is_write and self.dry_run:
+            preview: dict = {"dry_run": True, "method": method, "params": params}
+            if kwargs.get("files"):
+                preview["files"] = {
+                    name: getattr(f, "name", "<stream>") for name, f in kwargs["files"].items()
+                }
+            return preview
+        attempt = 0
+        while True:
+            if is_write:
+                await self.rate_limiter.acquire(params.get("chat_id"))
+            try:
+                resp = await self._client.post(f"{self.base_url}/{method}", **kwargs)
+            except httpx.HTTPError as exc:
+                raise TelegramNetworkError(exc, secret=self._token) from exc
+            data = resp.json()
+            if data.get("ok"):
+                return data["result"]
+            retry_after = (data.get("parameters") or {}).get("retry_after")
+            if (
+                data.get("error_code") == 429
+                and retry_after is not None
+                and attempt < self.max_retries
+                and retry_after <= self.max_retry_wait
+            ):
+                attempt += 1
+                for f in (kwargs.get("files") or {}).values():
+                    if hasattr(f, "seek"):
+                        f.seek(0)
+                await self._sleep(retry_after)
+                continue
             raise TelegramAPIError(
                 data.get("description", "Unknown error"),
                 data.get("error_code"),
+                retry_after,
             )
-        return data["result"]
 
     # ── Messages ──
 

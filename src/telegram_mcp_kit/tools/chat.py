@@ -2,10 +2,10 @@
 
 import json
 
-from telegram_mcp_kit.tools._base import get_client, mcp, resolve_chat_id
+from telegram_mcp_kit.tools._base import get_client, resolve_chat_id, tool
 
 
-@mcp.tool()
+@tool("read")
 async def get_chat_info(chat_id: str | None = None) -> str:
     """Get information about a chat (group, channel, or private chat).
 
@@ -17,7 +17,7 @@ async def get_chat_info(chat_id: str | None = None) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@tool("read")
 async def get_chat_member_count(chat_id: str | None = None) -> str:
     """Get the number of members in a chat.
 
@@ -29,7 +29,7 @@ async def get_chat_member_count(chat_id: str | None = None) -> str:
     return f"Member count: {count}"
 
 
-@mcp.tool()
+@tool("read")
 async def get_chat_admins(chat_id: str | None = None) -> str:
     """Get list of administrators in a chat.
 
@@ -41,7 +41,7 @@ async def get_chat_admins(chat_id: str | None = None) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@tool("destructive")
 async def ban_member(user_id: int, chat_id: str | None = None) -> str:
     """Ban a user from a chat.
 
@@ -54,7 +54,7 @@ async def ban_member(user_id: int, chat_id: str | None = None) -> str:
     return f"User {user_id} has been banned."
 
 
-@mcp.tool()
+@tool("write")
 async def unban_member(user_id: int, chat_id: str | None = None) -> str:
     """Unban a user from a chat.
 
@@ -67,7 +67,7 @@ async def unban_member(user_id: int, chat_id: str | None = None) -> str:
     return f"User {user_id} has been unbanned."
 
 
-@mcp.tool()
+@tool("destructive")
 async def set_chat_title(title: str, chat_id: str | None = None) -> str:
     """Change the title of a chat (group/channel).
 
@@ -80,7 +80,7 @@ async def set_chat_title(title: str, chat_id: str | None = None) -> str:
     return f"Chat title changed to: {title}"
 
 
-@mcp.tool()
+@tool("destructive")
 async def set_chat_description(description: str, chat_id: str | None = None) -> str:
     """Change the description of a chat (group/channel).
 
@@ -93,7 +93,7 @@ async def set_chat_description(description: str, chat_id: str | None = None) -> 
     return "Chat description updated."
 
 
-@mcp.tool()
+@tool("write")
 async def pin_message(
     message_id: int, chat_id: str | None = None, silent: bool = False
 ) -> str:
@@ -109,7 +109,7 @@ async def pin_message(
     return "Message pinned."
 
 
-@mcp.tool()
+@tool("destructive")
 async def unpin_message(
     chat_id: str | None = None, message_id: int | None = None
 ) -> str:

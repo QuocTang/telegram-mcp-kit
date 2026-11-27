@@ -1,12 +1,24 @@
 """File and photo tools: send_photo, send_document, get_file_info."""
 
-import json
-
 from telegram_mcp_kit.config import settings
-from telegram_mcp_kit.tools._base import get_client, mcp, resolve_chat_id
+from telegram_mcp_kit.safety import check_upload_path
+from telegram_mcp_kit.tools._base import (
+    get_client,
+    resolve_chat_id,
+    send_caption_overflow,
+    split_caption,
+    to_json,
+    tool,
+)
+
+_CAPTION_NOTE = (
+    "A caption longer than 1024 characters is truncated at a line break and the rest is "
+    "sent as reply messages; the result then has the keys message and "
+    "caption_overflow_messages."
+)
 
 
-@mcp.tool()
+@tool("write")
 async def send_photo(
     photo: str,
     chat_id: str | None = None,
@@ -22,11 +34,12 @@ async def send_photo(
         parse_mode: "Markdown", "MarkdownV2", or "HTML" for caption (optional)
     """
     cid = resolve_chat_id(chat_id)
+    caption, overflow = split_caption(caption)
     result = await get_client().send_photo(cid, photo, caption, parse_mode)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return to_json(await send_caption_overflow(cid, result, overflow, parse_mode))
 
 
-@mcp.tool()
+@tool("write")
 async def send_photo_file(
     file_path: str,
     chat_id: str | None = None,
@@ -36,17 +49,20 @@ async def send_photo_file(
     """Send a local photo file to a chat.
 
     Args:
-        file_path: Absolute path to the photo file on disk
+        file_path: Absolute path to the photo file on disk (must lie inside
+            TELEGRAM_UPLOAD_DIRS when that variable is set)
         chat_id: Chat ID or @channel_username (uses TELEGRAM_CHAT_ID if omitted)
         caption: Photo caption (optional)
         parse_mode: "Markdown", "MarkdownV2", or "HTML" for caption (optional)
     """
     cid = resolve_chat_id(chat_id)
-    result = await get_client().send_photo_file(cid, file_path, caption, parse_mode)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    path = str(check_upload_path(file_path))
+    caption, overflow = split_caption(caption)
+    result = await get_client().send_photo_file(cid, path, caption, parse_mode)
+    return to_json(await send_caption_overflow(cid, result, overflow, parse_mode))
 
 
-@mcp.tool()
+@tool("write")
 async def send_document(
     document: str,
     chat_id: str | None = None,
@@ -62,11 +78,12 @@ async def send_document(
         parse_mode: "Markdown", "MarkdownV2", or "HTML" for caption (optional)
     """
     cid = resolve_chat_id(chat_id)
+    caption, overflow = split_caption(caption)
     result = await get_client().send_document(cid, document, caption, parse_mode)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return to_json(await send_caption_overflow(cid, result, overflow, parse_mode))
 
 
-@mcp.tool()
+@tool("write")
 async def send_document_file(
     file_path: str,
     chat_id: str | None = None,
@@ -76,17 +93,20 @@ async def send_document_file(
     """Send a local file as a document to a chat.
 
     Args:
-        file_path: Absolute path to the file on disk
+        file_path: Absolute path to the file on disk (must lie inside
+            TELEGRAM_UPLOAD_DIRS when that variable is set)
         chat_id: Chat ID or @channel_username (uses TELEGRAM_CHAT_ID if omitted)
         caption: Document caption (optional)
         parse_mode: "Markdown", "MarkdownV2", or "HTML" for caption (optional)
     """
     cid = resolve_chat_id(chat_id)
-    result = await get_client().send_document_file(cid, file_path, caption, parse_mode)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    path = str(check_upload_path(file_path))
+    caption, overflow = split_caption(caption)
+    result = await get_client().send_document_file(cid, path, caption, parse_mode)
+    return to_json(await send_caption_overflow(cid, result, overflow, parse_mode))
 
 
-@mcp.tool()
+@tool("read")
 async def get_file_info(file_id: str) -> str:
     """Get file info and download link from Telegram.
 
@@ -98,4 +118,4 @@ async def get_file_info(file_id: str) -> str:
     result["download_url"] = (
         f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}"
     )
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return to_json(result)

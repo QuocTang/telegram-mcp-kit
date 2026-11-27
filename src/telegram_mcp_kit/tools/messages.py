@@ -1,11 +1,16 @@
 """Message tools: send, edit, delete, forward."""
 
-import json
+from telegram_mcp_kit.safety import check_chat_allowed
+from telegram_mcp_kit.tools._base import (
+    get_client,
+    resolve_chat_id,
+    send_long_text,
+    to_json,
+    tool,
+)
 
-from telegram_mcp_kit.tools._base import get_client, mcp, resolve_chat_id
 
-
-@mcp.tool()
+@tool("write")
 async def send_message(
     text: str,
     chat_id: str | None = None,
@@ -14,6 +19,9 @@ async def send_message(
 ) -> str:
     """Send a text message to a Telegram chat.
 
+    Text longer than 4096 characters is sent as several messages, split at line
+    breaks where possible; the result is then a JSON list of the sent messages.
+
     Args:
         text: Message text (supports Markdown/HTML based on parse_mode)
         chat_id: Chat ID or @channel_username (uses TELEGRAM_CHAT_ID if omitted)
@@ -21,11 +29,12 @@ async def send_message(
         reply_to_message_id: ID of message to reply to (optional)
     """
     cid = resolve_chat_id(chat_id)
-    result = await get_client().send_message(cid, text, parse_mode, reply_to_message_id)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    client = get_client()
+    result = await send_long_text(client.send_message, cid, text, parse_mode, reply_to_message_id)
+    return to_json(result)
 
 
-@mcp.tool()
+@tool("destructive")
 async def edit_message(
     message_id: int,
     text: str,
@@ -42,10 +51,10 @@ async def edit_message(
     """
     cid = resolve_chat_id(chat_id)
     result = await get_client().edit_message_text(cid, message_id, text, parse_mode)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return to_json(result)
 
 
-@mcp.tool()
+@tool("destructive")
 async def delete_message(message_id: int, chat_id: str | None = None) -> str:
     """Delete a message from a chat.
 
@@ -58,7 +67,7 @@ async def delete_message(message_id: int, chat_id: str | None = None) -> str:
     return "Message deleted successfully."
 
 
-@mcp.tool()
+@tool("write")
 async def forward_message(
     from_chat_id: str, message_id: int, chat_id: str | None = None
 ) -> str:
@@ -70,5 +79,6 @@ async def forward_message(
         chat_id: Target chat ID (uses TELEGRAM_CHAT_ID if omitted)
     """
     cid = resolve_chat_id(chat_id)
+    check_chat_allowed(from_chat_id)
     result = await get_client().forward_message(cid, from_chat_id, message_id)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return to_json(result)

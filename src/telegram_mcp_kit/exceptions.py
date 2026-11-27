@@ -10,9 +10,12 @@ class TelegramError(Exception):
 class TelegramAPIError(TelegramError):
     """Telegram API returned an error response (ok=false)."""
 
-    def __init__(self, description: str, error_code: int | None = None):
+    def __init__(
+        self, description: str, error_code: int | None = None, retry_after: int | None = None
+    ):
         self.description = description
         self.error_code = error_code
+        self.retry_after = retry_after
         msg = f"[{error_code}] {description}" if error_code else description
         super().__init__(msg)
 
@@ -31,3 +34,7 @@ class TelegramNetworkError(TelegramError):
         if secret:
             msg = msg.replace(secret, "***")
         super().__init__(msg)
+
+
+class TelegramGuardError(TelegramError):
+    """A safety guard (allowlist, upload directory, read-only mode) rejected the call."""
