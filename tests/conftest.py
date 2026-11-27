@@ -17,3 +17,13 @@ def mock_client():
     client = AsyncMock(spec=TelegramClient)
     with patch("telegram_mcp_kit.tools._base._client", client):
         yield client
+
+
+@pytest.fixture()
+def approved():
+    """An accepted confirmation, as the elicitation resolver injects it."""
+    from mcp.server.mcpserver import AcceptedElicitation
+
+    from telegram_mcp_kit.models import Confirmation
+
+    return AcceptedElicitation(data=Confirmation(confirmed=True))

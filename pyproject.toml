@@ -1,6 +1,6 @@
 [project]
 name = "telegram-mcp-kit"
-version = "0.2.3"
+version = "0.4.0"
 description = "Telegram Bot API integration via MCP"
 readme = "README.md"
 license = "MIT"
@@ -9,9 +9,9 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "httpx>=0.28.1",
-    "mcp[cli]>=1.26.0",
-    "pydantic-settings>=2.13.1",
+    "httpx>=0.29.0,<1",
+    "mcp[cli]>=2.3.0,<3",
+    "pydantic-settings>=2.16.3,<3",
 ]
 
 [project.urls]
@@ -20,9 +20,9 @@ Issues = "https://github.com/QuocTang/telegram-mcp-kit/issues"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.25",
-    "ruff>=0.11",
+    "pytest>=9.2.0,<10",
+    "pytest-asyncio>=1.5.0,<2",
+    "ruff>=0.17.6,<0.18",
 ]
 
 [project.scripts]
@@ -37,6 +37,7 @@ packages = ["src/telegram_mcp_kit"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
 [tool.ruff]

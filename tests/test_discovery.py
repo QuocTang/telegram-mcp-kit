@@ -4,10 +4,10 @@ from telegram_mcp_kit.tools import discover_tools
 from telegram_mcp_kit.tools._base import mcp
 
 
-def test_discover_tools_registers_all():
-    """After discover_tools(), all 20 tools should be registered on the mcp instance."""
+async def test_discover_tools_registers_all():
+    """After discover_tools(), every tool should be registered on the mcp instance."""
     discover_tools()
-    tools = list(mcp._tool_manager._tools.keys())
+    tools = [tool.name for tool in await mcp.list_tools()]
 
     expected = [
         "send_message",
@@ -30,6 +30,17 @@ def test_discover_tools_registers_all():
         "send_document_file",
         "get_file_info",
         "get_bot_info",
+        "escape_markdown_v2",
+        "send_rich_message",
+        "set_reaction",
+        "send_chat_action",
+        "send_poll",
+        "send_checklist",
+        "send_video",
+        "send_audio",
+        "send_media_group",
+        "send_progress",
+        "ask_approval",
     ]
     for name in expected:
         assert name in tools, f"Tool {name!r} not found after discover_tools()"
