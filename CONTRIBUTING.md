@@ -7,27 +7,32 @@ Thanks for your interest in contributing to **telegram-mcp-kit**!
 Adding a tool requires **one file** and **zero changes** to existing code.
 
 1. Create a new file under `src/telegram_mcp_kit/tools/` (e.g. `stickers.py`).
-2. Import the shared `mcp` instance and `get_client` helper:
+2. Import the `tool` decorator and `get_client` helper:
 
    ```python
-   from telegram_mcp_kit.tools._base import get_client, mcp
+   from telegram_mcp_kit.models import SendResult
+   from telegram_mcp_kit.tools._base import get_client, resolve_chat_id, tool
    ```
 
-3. Define your tool with the `@mcp.tool()` decorator:
+3. Define your tool with the `@tool(kind)` decorator. `kind` is `"read"`, `"write"` or
+   `"destructive"`; it sets the MCP annotations and decides whether the tool survives
+   `TELEGRAM_READ_ONLY`. Return a Pydantic model or `dict` so the tool publishes an
+   `outputSchema`:
 
    ```python
-   @mcp.tool()
-   async def send_sticker(chat_id: str, sticker: str) -> str:
+   @tool("write")
+   async def send_sticker(sticker: str, chat_id: str | None = None) -> SendResult:
        """Send a sticker to a chat.
 
        Args:
            chat_id: Chat ID or @channel_username
            sticker: Sticker file_id or URL
        """
+       cid = resolve_chat_id(chat_id)
        result = await get_client()._request(
-           "sendSticker", json={"chat_id": chat_id, "sticker": sticker}
+           "sendSticker", json={"chat_id": cid, "sticker": sticker}
        )
-       return json.dumps(result, ensure_ascii=False, indent=2)
+       return SendResult(messages=[result])
    ```
 
 4. Add tests in `tests/test_tools_stickers.py`.
