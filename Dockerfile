@@ -9,7 +9,7 @@ COPY src/ src/
 
 RUN uv sync --frozen --no-dev
 
-ENV MCP_TRANSPORT=sse
+ENV MCP_TRANSPORT=streamable-http
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=7860
 

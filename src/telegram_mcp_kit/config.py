@@ -1,5 +1,7 @@
 """Centralized configuration for Telegram MCP Server."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -21,6 +23,7 @@ class Settings(BaseSettings):
     telegram_dry_run: bool = False
     telegram_upload_dirs: str = ""
     telegram_wrap_updates: bool = False
+    telegram_confirm_destructive: Literal["auto", "require", "off"] = "auto"
 
     # Rate limiting and retries
     telegram_max_retries: int = 3

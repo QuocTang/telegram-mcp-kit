@@ -4,16 +4,24 @@ Every tool module imports ``mcp`` and ``get_client`` from here so there is
 exactly one ``MCPServer`` instance across the whole server.
 """
 
-import json
 from collections.abc import Callable
 from importlib.metadata import version
 from typing import Any, Literal, TypeVar
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import (
+    AcceptedElicitation,
+    Context,
+    Elicit,
+    ElicitationResult,
+    MCPServer,
+)
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import ToolAnnotations
 
 from telegram_mcp_kit.client import RateLimiter, TelegramClient
 from telegram_mcp_kit.config import settings
 from telegram_mcp_kit.formatting import CAPTION_LIMIT, MESSAGE_LIMIT, split_text
+from telegram_mcp_kit.models import ActionResult, Confirmation, SendResult
 from telegram_mcp_kit.safety import check_chat_allowed
 
 mcp = MCPServer("telegram-mcp-kit", version=version("telegram-mcp-kit"))
@@ -26,13 +34,22 @@ TOOL_KINDS: dict[str, ToolKind] = {}
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 
-def tool(kind: ToolKind, **kwargs: Any) -> Callable[[_F], _F]:
-    """Register a tool on the shared server and record its kind.
+def tool(
+    kind: ToolKind,
+    *,
+    idempotent: bool | None = None,
+    open_world: bool = True,
+    **kwargs: Any,
+) -> Callable[[_F], _F]:
+    """Register a tool on the shared server with annotations derived from its kind.
 
     Args:
         kind: ``"read"`` for tools without side effects, ``"write"`` for tools that
             add state (send, pin), ``"destructive"`` for tools that remove or
             overwrite state (delete, ban, edit).
+        idempotent: Value of ``idempotentHint``; defaults to True for read tools and
+            False otherwise.
+        open_world: Value of ``openWorldHint``; False for tools that never call Telegram.
         **kwargs: Passed to ``MCPServer.tool``.
 
     Returns:
@@ -42,9 +59,59 @@ def tool(kind: ToolKind, **kwargs: Any) -> Callable[[_F], _F]:
     def decorator(fn: _F) -> _F:
         name = kwargs.get("name") or fn.__name__
         TOOL_KINDS[name] = kind
-        return mcp.tool(**kwargs)(fn)
+        annotations = ToolAnnotations(
+            read_only_hint=kind == "read",
+            destructive_hint=kind == "destructive",
+            idempotent_hint=(kind == "read") if idempotent is None else idempotent,
+            open_world_hint=open_world,
+        )
+        return mcp.tool(annotations=annotations, **kwargs)(fn)
 
     return decorator
+
+
+async def confirm_gate(
+    ctx: Context, confirm: bool, action: str
+) -> Confirmation | Elicit[Confirmation]:
+    """Decide how a destructive tool call is confirmed (TELEGRAM_CONFIRM_DESTRUCTIVE).
+
+    Used inside a ``Resolve`` resolver. When the client declares form elicitation the
+    user is asked; otherwise ``"require"`` mode demands ``confirm=true`` and ``"auto"``
+    mode lets the call through.
+
+    Returns:
+        An ``Elicit`` request for the user, or an already granted ``Confirmation``.
+
+    Raises:
+        ToolError: In ``"require"`` mode when the client cannot elicit and *confirm*
+            is false.
+    """
+    mode = settings.telegram_confirm_destructive
+    if mode == "off":
+        return Confirmation(confirmed=True)
+    caps = ctx.client_capabilities
+    elicitation = caps.elicitation if caps is not None else None
+    if elicitation is not None and (elicitation.form is not None or elicitation.url is None):
+        return Elicit(f"Telegram MCP asks for confirmation: {action}", Confirmation)
+    if mode == "require" and not confirm:
+        raise ToolError(f"{action} is destructive; call again with confirm=true to proceed")
+    return Confirmation(confirmed=True)
+
+
+def ensure_confirmed(approval: ElicitationResult[Confirmation] | None) -> None:
+    """Raise unless *approval* is an accepted confirmation with ``confirmed`` set.
+
+    Raises:
+        ToolError: The user declined, cancelled or left the box unchecked.
+    """
+    if not isinstance(approval, AcceptedElicitation) or not approval.data.confirmed:
+        action = getattr(approval, "action", "missing")
+        raise ToolError(f"Destructive action not confirmed (elicitation {action})")
+
+
+def action_result(result: Any, detail: str) -> ActionResult:
+    """Build an ActionResult from a Bot API result (True or a dry-run preview)."""
+    return ActionResult(ok=bool(result), detail=detail, result=result)
 
 
 def apply_read_only(server: MCPServer = mcp) -> list[str]:
@@ -98,14 +165,9 @@ def resolve_chat_id(chat_id: str | None) -> str:
     )
 
 
-def to_json(result: Any) -> str:
-    """Serialize a Bot API result for a tool response."""
-    return json.dumps(result, ensure_ascii=False, indent=2)
-
-
 async def send_long_text(
     send: Callable[..., Any], cid: str, text: str, parse_mode: str | None, *args: Any
-) -> dict | list[dict]:
+) -> SendResult:
     """Send *text* through *send*, split into chunks of at most 4096 characters.
 
     Args:
@@ -113,16 +175,13 @@ async def send_long_text(
             positional *args* are passed with the first chunk only.
 
     Returns:
-        The sent message when the text fits in one message, otherwise the list of
-        sent messages in order.
+        The sent messages in order.
     """
     chunks = split_text(text, MESSAGE_LIMIT)
-    if len(chunks) == 1:
-        return await send(cid, text, parse_mode, *args)
     sent = [await send(cid, chunks[0], parse_mode, *args)]
     for chunk in chunks[1:]:
         sent.append(await send(cid, chunk, parse_mode, *[None] * len(args)))
-    return sent
+    return SendResult(messages=sent)
 
 
 def split_caption(caption: str | None) -> tuple[str | None, list[str]]:
@@ -142,16 +201,13 @@ def split_caption(caption: str | None) -> tuple[str | None, list[str]]:
 
 async def send_caption_overflow(
     cid: str, media_result: dict, overflow: list[str], parse_mode: str | None
-) -> dict:
+) -> SendResult:
     """Send caption overflow as replies to the media message.
 
     Returns:
-        *media_result* unchanged when there is no overflow, otherwise
-        ``{"message": media_result, "caption_overflow_messages": [...]}``.
+        The media message followed by the overflow messages.
     """
-    if not overflow:
-        return media_result
     client = get_client()
     reply_to = media_result.get("message_id") if isinstance(media_result, dict) else None
     extra = [await client.send_message(cid, chunk, parse_mode, reply_to) for chunk in overflow]
-    return {"message": media_result, "caption_overflow_messages": extra}
+    return SendResult(messages=[media_result, *extra])
