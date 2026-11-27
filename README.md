@@ -132,9 +132,9 @@ claude mcp add telegram-mcp-kit \
 |----------|----------|-------------|
 | `TELEGRAM_BOT_TOKEN` | Yes | Token from BotFather |
 | `TELEGRAM_CHAT_ID` | No | Default chat ID (if set, `chat_id` can be omitted in tool calls) |
-| `MCP_TRANSPORT` | No | `stdio` (default) or `sse` |
-| `MCP_HOST` | No | Bind host (default `127.0.0.1`) |
-| `MCP_PORT` | No | Bind port (default `8000`) |
+| `MCP_TRANSPORT` | No | `stdio` (default), `sse` or `streamable-http` |
+| `MCP_HOST` | No | Bind host for `sse` and `streamable-http` (default `127.0.0.1`) |
+| `MCP_PORT` | No | Bind port for `sse` and `streamable-http` (default `8000`) |
 | `HTTP_TIMEOUT` | No | Telegram API timeout in seconds (default `30`) |
 
 ## 📦 Features

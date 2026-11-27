@@ -4,10 +4,10 @@ from telegram_mcp_kit.tools import discover_tools
 from telegram_mcp_kit.tools._base import mcp
 
 
-def test_discover_tools_registers_all():
+async def test_discover_tools_registers_all():
     """After discover_tools(), all 20 tools should be registered on the mcp instance."""
     discover_tools()
-    tools = list(mcp._tool_manager._tools.keys())
+    tools = [tool.name for tool in await mcp.list_tools()]
 
     expected = [
         "send_message",

@@ -1,14 +1,22 @@
 """Telegram Bot API client using httpx."""
 
+import logging
+
 import httpx
 
 from telegram_mcp_kit.exceptions import TelegramAPIError, TelegramNetworkError
+
+# httpx and httpcore log the full request URL at INFO/DEBUG level, and the Bot API URL
+# embeds the bot token, so these loggers are capped at WARNING.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 
 class TelegramClient:
     """Lightweight Telegram Bot API client."""
 
     def __init__(self, token: str, timeout: float = 30.0):
+        self._token = token
         self.base_url = f"https://api.telegram.org/bot{token}"
         self._client = httpx.AsyncClient(timeout=timeout)
 
@@ -17,7 +25,7 @@ class TelegramClient:
         try:
             resp = await self._client.post(f"{self.base_url}/{method}", **kwargs)
         except httpx.HTTPError as exc:
-            raise TelegramNetworkError(exc) from exc
+            raise TelegramNetworkError(exc, secret=self._token) from exc
         data = resp.json()
         if not data.get("ok"):
             raise TelegramAPIError(

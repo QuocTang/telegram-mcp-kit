@@ -1,15 +1,17 @@
 """Shared MCP instance and client accessor.
 
 Every tool module imports ``mcp`` and ``get_client`` from here so there is
-exactly one ``FastMCP`` instance across the whole server.
+exactly one ``MCPServer`` instance across the whole server.
 """
 
-from mcp.server.fastmcp import FastMCP
+from importlib.metadata import version
+
+from mcp.server.mcpserver import MCPServer
 
 from telegram_mcp_kit.client import TelegramClient
 from telegram_mcp_kit.config import settings
 
-mcp = FastMCP("telegram-mcp-kit", host=settings.mcp_host, port=settings.mcp_port)
+mcp = MCPServer("telegram-mcp-kit", version=version("telegram-mcp-kit"))
 
 _client: TelegramClient | None = None
 

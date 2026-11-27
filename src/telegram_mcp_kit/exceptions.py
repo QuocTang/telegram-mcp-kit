@@ -18,8 +18,16 @@ class TelegramAPIError(TelegramError):
 
 
 class TelegramNetworkError(TelegramError):
-    """Network-level failure when calling the Telegram API."""
+    """Network-level failure when calling the Telegram API.
 
-    def __init__(self, cause: httpx.HTTPError):
+    Args:
+        cause: The underlying httpx error.
+        secret: Optional value (the bot token) that is masked in the error message.
+    """
+
+    def __init__(self, cause: httpx.HTTPError, secret: str | None = None):
         self.cause = cause
-        super().__init__(str(cause))
+        msg = str(cause)
+        if secret:
+            msg = msg.replace(secret, "***")
+        super().__init__(msg)
